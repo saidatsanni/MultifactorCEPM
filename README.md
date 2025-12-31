@@ -11,7 +11,7 @@ This folder contains the data files used for analysis.
 - **`G7_International_data.xlsx`**
   Contains quarterly returns and predictors for G7 countries.
 
-  - **`daily_stock_return.xlsx`**
+- **`daily_stock_return.xlsx`**
   Contains daily returns data.
 
 - **`crsp_dailyret_1926.xlsx`**
