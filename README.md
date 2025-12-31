@@ -6,15 +6,19 @@ This is the ReadMe document for obtaining the main results in the paper.
 The **`Datasets`** folder contains the data files used for analysis.
 
 - **`qrtly_data_2020.xlsx`**
+  
   Contains quarterly returns and predictors.
   
 - **`G7_International_data.xlsx`**
+  
   Contains quarterly returns and predictors for G7 countries.
 
 - **`daily_stock_return.xlsx`**
+  
   Contains daily returns data.
 
 - **`crsp_dailyret_1926.xlsx`**
+  
   Contains daily returns data from 1926.
 
   
