@@ -6,7 +6,7 @@ rm(list = ls())
 
 # Load required packages
 pkgs <- c("glmnet", "readxl", "devtools", "BayesVarSel", "dplyr", "leaps", 
-          "plotmo", "stargazer", "EnvStats", "moments", "stringi")
+          "plotmo", "stargazer", "EnvStats", "moments", "stringi", "xtable")
 install.packages(setdiff(pkgs, rownames(installed.packages())))
 if (!require("FarmSelect")) devtools::install_github("kbose28/FarmSelect")
 invisible(lapply(c(pkgs, "FarmSelect"), library, character.only = TRUE))

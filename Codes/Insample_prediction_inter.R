@@ -1,11 +1,10 @@
 # In-Sample Predictive Regression Analysis
 # ===================================
 rm(list=ls())
-library(readxl)
-library(sandwich)
-library(lmtest)
-library(lubridate)
-library(dplyr)
+
+pkgs <- c("readxl", "sandwich", "lmtest", "lubridate", "dplyr")
+install.packages(setdiff(pkgs, rownames(installed.packages())))
+invisible(lapply(c(pkgs), library, character.only = TRUE))
 
 # DATA PREPARATION
 load_data <- function(file = "./Datasets/G7_International_data.xlsx", sheet = "DATA_INT") {

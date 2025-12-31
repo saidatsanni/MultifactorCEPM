@@ -1,16 +1,15 @@
+
 rm(list=ls())
-library(lubridate)
-library(dplyr)
-library(readxl)
-library(Hmisc)
-library(numDeriv)
+
+pkgs <- c("readxl", "numDeriv", "lubridate", "dplyr", "Hmisc")
+install.packages(setdiff(pkgs, rownames(installed.packages())))
+invisible(lapply(c(pkgs), library, character.only = TRUE))
 
 ##load the data
 day_data <- read_excel("./Datasets/crsp_dailyret_1926.xlsx")
 day_data$Date <- as.Date(day_data$Date, format= "%Y-%m-%d")
 full_q <- subset(day_data, day_data$Date >= "1928-06-30" & day_data$Date <= "2021-03-31")
 DATE <- full_q$Date
-
 
 ##Step 1: Effects of Great Depression
 D1 <- ifelse((full_q$Date >= "1930-09-01" & full_q$Date < "1933-12-01"),1,0)

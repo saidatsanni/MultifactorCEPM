@@ -1,9 +1,10 @@
 
-# OUT-OF-SAMPLE FORECASTING & TESTS
+# OUT-OF-SAMPLE TESTS
 rm(list=ls())
-library(readxl)
-library(lubridate)
-library(dplyr)
+
+pkgs <- c("readxl", "lubridate", "dplyr")
+install.packages(setdiff(pkgs, rownames(installed.packages())))
+invisible(lapply(c(pkgs), library, character.only = TRUE))
 
 ##Load the dataset
 data_orig <- read_excel("./Datasets/qrtly_data_2020.xlsx")

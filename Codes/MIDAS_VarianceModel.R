@@ -1,8 +1,9 @@
+
 rm(list=ls())
-library(lubridate)
-library(dplyr)
-library(readxl)
-library(numDeriv)
+
+pkgs <- c("readxl", "numDeriv", "lubridate", "dplyr")
+install.packages(setdiff(pkgs, rownames(installed.packages())))
+invisible(lapply(c(pkgs), library, character.only = TRUE))
 
 ##Load the daily returns data
 day_data <- read_excel("./Datasets/daily_stock_return.xlsx")
@@ -54,7 +55,7 @@ T_idx <- list$index[-c(1:3)]
 
 ##DEFINE THE MIDAS FUNCTION
 r <- day_data$Dailyreturn           #daily return
-Y <- as.matrix(full_q$QERET)        #y is the quarterly return
+Y <- as.matrix(full_q$QERET)        #quarterly return
 D <- 252
 D1 <-252
 n <- length(T_idx)
