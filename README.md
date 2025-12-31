@@ -1,6 +1,6 @@
 # Code for "Searching for the Best Conditional Equity Premium Model by Guo Hui, Saidat Abidemi Sanni, and Yan Yu"
 
-This is the ReadMe document for obtaining the data analysis results in the main paper.
+This is the ReadMe document for obtaining the main results in the paper.
 
 ## 1. Datasets
 The **`Datasets`** folder contains the data files used for analysis.
