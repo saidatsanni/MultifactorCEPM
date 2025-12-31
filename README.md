@@ -17,5 +17,7 @@ This folder contains the data files used for analysis.
 - **`crsp_dailyret_1926.xlsx`**
   Contains daily returns data from 1926.
 
-  ## 2. Codes
+  
+
+## 2. Codes
 This folder contains the codes for the main results.
