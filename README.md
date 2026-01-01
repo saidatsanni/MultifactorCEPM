@@ -35,7 +35,7 @@ The **`Codes`** folder contains the contains scripts used to construct main resu
 
   In-sample predictive regressions for one-quarter-ahead returns using the full sample, first-half sample, and second-half sample.
 
-- **`Insample_prediction_qeret4`**
+- **`Insample_prediction_qeret4.R`**
 
   In-sample predictive regressions for four-quarter-ahead returns.
 
