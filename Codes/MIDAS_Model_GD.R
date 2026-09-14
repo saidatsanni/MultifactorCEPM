@@ -1,232 +1,154 @@
+## =============================================================================
+## MIDAS conditional equity premium: Great Depression dummy and absolute inflation
+## Sample 1928Q2 - 2021Q1, D = 504 daily returns.
+##   Row 1: MIDAS + LPE + INFL
+##   Row 2: MIDAS + LPE + INFL     + GD interactions
+##   Row 3: MIDAS + LPE + |INFL|
+##   Row 4: MIDAS + LPE + |INFL|   + GD interactions
+## =============================================================================
+rm(list = ls())
+t0 <- Sys.time()
 
-rm(list=ls())
-
-pkgs <- c("readxl", "numDeriv", "lubridate", "dplyr", "Hmisc")
+pkgs <- c("readxl", "numDeriv", "lubridate", "dplyr", "writexl")
 install.packages(setdiff(pkgs, rownames(installed.packages())))
-invisible(lapply(c(pkgs), library, character.only = TRUE))
+invisible(lapply(pkgs, library, character.only = TRUE))
 
-##load the data
-day_data <- read_excel("./Datasets/crsp_dailyret_1926.xlsx")
-day_data$Date <- as.Date(day_data$Date, format= "%Y-%m-%d")
-full_q <- subset(day_data, day_data$Date >= "1928-06-30" & day_data$Date <= "2021-03-31")
-DATE <- full_q$Date
+## ---- Settings ---------------------------------------------------------------
+daily_file <- "./Datasets/crsp_dailyret_1926.xlsx"
+q_start <- "1928-06-30"; q_end <- "2021-03-31"
+gd_start <- "1930-09-01"; gd_end <- "1933-12-01"      
+D       <- 504
+k_grid  <- seq(-0.00001, -0.005, -0.0001)              
+optim_ctrl <- list(reltol = 1e-12, maxit = 5000)       
+star_cut <- c(0.01, 0.05, 0.10)                        
 
-##Step 1: Effects of Great Depression
-D1 <- ifelse((full_q$Date >= "1930-09-01" & full_q$Date < "1933-12-01"),1,0)
-full_q$D1_LAG <- as.numeric(Lag(D1,shift = 1))
-full_q$D1_LAG[1]<- 0
-full_q$LPEGD_LAG <- full_q$LPE_LAG*full_q$D1_LAG
-full_q$INFLGD_LAG <- full_q$INFL_LAG*full_q$D1_LAG
-full_q$DUMMY_LAG <- full_q$D1_LAG
-DUMMY_LAG <- full_q$D1_LAG
+## ---- Data -------------------------------------------------------------------
+day_data <- read_excel(daily_file)
+day_data$Date <- as.Date(day_data$Date)
+day_data$DailyReturnDate_504 <- as.Date(ymd(day_data$DailyReturnDate_504))
+day_data$index <- seq_len(nrow(day_data))
+r <- as.numeric(day_data$Dailyreturn_504)
 
-##Specify the variables
-X<- data.frame(full_q$LPE_LAG,full_q$INFL_LAG,full_q$LPEGD_LAG,full_q$INFLGD_LAG)
-Y <- as.matrix(full_q$QERET)
+q <- as.data.frame(subset(day_data, Date >= as.Date(q_start) & Date <= as.Date(q_end)))
+for (v in c("QERET", "LPE_LAG", "INFL_LAG")) q[[v]] <- as.numeric(q[[v]])
+gd <- as.numeric(q$Date >= as.Date(gd_start) & q$Date < as.Date(gd_end))
+q$DUMMY_LAG   <- c(0, head(gd, -1))
+q$ABSINFL_LAG <- abs(q$INFL_LAG)
+n <- nrow(q)
 
+## last trading day of each quarter in the daily file
+qe <- day_data %>%
+  filter(!is.na(DailyReturnDate_504), month(DailyReturnDate_504) %in% c(3, 6, 9, 12)) %>%
+  mutate(yrmon = format(DailyReturnDate_504, "%Y-%m")) %>%
+  group_by(yrmon) %>% slice_max(DailyReturnDate_504, n = 1, with_ties = FALSE) %>%
+  ungroup() %>% arrange(index)
+T_idx <- qe$index[-(1:6)]
+stopifnot(length(T_idx) == n, T_idx[1] >= D)
 
-##Step 2: OBTAIN THE MIDAS VARIANCE AND MIDAS WITH DUMMY
-day_data$index <- seq(1,nrow(day_data))
-day_data$DailyReturnDate_504  <- as.Date(ymd(day_data$DailyReturnDate_504))
-day_data$yrmon <- substr(day_data$DailyReturnDate_504, start = 1, stop = 7)
-day_data$mon <- substr(day_data$DailyReturnDate_504, start = 6, stop = 7)
-day_data$dayy <- substr(day_data$DailyReturnDate_504, start = 9, stop = 10)
-day_data$dailyqt <- ifelse(day_data$mon %in% c("03","06","09","12"),1,0)
-list <-day_data %>% 
-  group_by (yrmon)%>% 
-  filter(dailyqt==1) %>% 
-  filter(dayy == max(dayy))
-
-T_idx <- list$index[-c(1:6)] 
-
-##MIDAS FUNCTION
-r <- day_data$Dailyreturn_504         
-D <- 504
-D1 <- 504
-n <- length(T_idx)
-
-
-w=matrix(0,nrow=length(T_idx)); vt=matrix(0,nrow=length(T_idx)); denom<-0
-t=d=i=1
-
-midas <- function(r,k1,k2){
-  denom = sum(exp(((1:D1)-1)*k1+k2*((1:D1)-1)^2))
-  for (t in 1:n){
-    w <- exp(k1*(1:D-1) + k2*(1:D-1)^2)/denom
-    vt[t,] <- 66*sum(w*((r[T_idx[t]:(T_idx[t]-(D-1))]^2)))
-  }
-  list(vt,w)
+## ---- Model blocks -----------------------------------------------------------
+## MIDAS variance for all quarters, weights on days 0..D-1 back from each quarter-end.
+R2 <- t(vapply(T_idx, function(ti) r[ti:(ti - D + 1)]^2, numeric(D)))   # n x D
+jj <- 0:(D - 1)
+midas_var <- function(k1, k2) {
+  w <- exp(k1 * jj + k2 * jj^2); w <- w / sum(w)
+  66 * drop(R2 %*% w)
 }
 
-##ITERATIVE ALGORITHM
-log_lik_iter<- function(k,x,y,r,beta) {
-  vtm <-midas(r,k[1],k[2])[[1]]
-  vtm_D <- vtm*DUMMY_LAG
-  mu <- beta[1] + beta[2]*vtm + beta[3]*x[,1]+beta[4]*x[,2] + beta[5]*vtm_D+beta[6]*x[,3] + beta[7]*x[,4]
-  logl_vec2 <- -(1/2)*sum(log(vtm)) - (1/2)*sum((y - mu)^2/vtm)
-  return(-logl_vec2)
+make_X <- function(vt, spec) {
+  X <- cbind(1, vt, as.matrix(q[, spec$vars]))
+  if (spec$gd) X <- cbind(X, vt * q$DUMMY_LAG, as.matrix(q[, spec$vars]) * q$DUMMY_LAG)
+  X
+}
+wls_beta <- function(vt, spec) unname(lm.wfit(make_X(vt, spec), q$QERET, w = 1 / vt)$coefficients)
+
+negll <- function(theta, spec) {
+  p  <- length(theta) - 2
+  vt <- midas_var(theta[p + 1], theta[p + 2])
+  mu <- drop(make_X(vt, spec) %*% theta[1:p])
+  0.5 * sum(log(vt)) + 0.5 * sum((q$QERET - mu)^2 / vt)
+}
+ll_i <- function(theta, spec) {
+  p  <- length(theta) - 2
+  vt <- midas_var(theta[p + 1], theta[p + 2])
+  mu <- drop(make_X(vt, spec) %*% theta[1:p])
+  -0.5 * log(vt) - 0.5 * (q$QERET - mu)^2 / vt
+}
+## profile likelihood in k
+negll_k <- function(k, spec) {
+  vt <- midas_var(k[1], k[2])
+  negll(c(wls_beta(vt, spec), k), spec)
 }
 
-###GRID SEARCH FOR K1 AND K2 STARTING VALUES
-grid1 <- seq(-0.00001,-0.005, -0.0001)
-grid2 <- seq (-0.00001,-0.005, -0.0001)
-
-ll_save<-matrix(NA, nrow = length(grid1), ncol = length(grid2))
-for (l in 1:length(grid1)){
-  for (m in 1:length(grid2)){
-    K <- c(grid1[l], grid2[m])
-    k.old = K
-    epsilon = 10^(-6)
-    delta=1
-    step=0
-    logL.old=1
-    
-    while((delta>=epsilon)&(step<50)){
-      step=step+1
-      vtm <-midas(r,K[1],K[2])[[1]]
-      vtm_D <- vtm*DUMMY_LAG
-      wts <- 1/vtm
-      vt_wls <- lm(Y ~ vtm+ X[,1]+X[,2]+ vtm_D +X[,3]+X[,4],weights=wts)
-      beta = vt_wls$coefficients
-      
-      #maximize log-likelihood;
-      optim <- optim(k.old, log_lik_iter, x=X, y=Y,r=r, beta=beta)
-      k.new = optim$par
-      logL = optim$value
-      delta = max(abs(k.new-k.old))
-      delta2 = abs(logL-logL.old)
-      k.old = k.new
-      logL.old = logL
-      ll_save[l,m] = -logL
+fit_spec <- function(spec, k_start = NULL) {
+  ## 1. grid search: profile likelihood
+  if (is.null(k_start)) {
+    best <- list(val = Inf, k = NULL)
+    for (k1 in k_grid) for (k2 in k_grid) {
+      op <- optim(c(k1, k2), negll_k, spec = spec)
+      if (op$value < best$val) best <- list(val = op$value, k = op$par)
     }
+    k_start <- best$k
   }
-}
-indices<-which(ll_save == max(ll_save), arr.ind=TRUE)
-k_1<-grid1[indices[1]]
-k_2<- grid2[indices[2]]
-
-
-##Use the the k.new value from the iterative algorithm as the starting values in the one-step algorithm
-K= c(k_1,k_2)
-k.old = K
-epsilon = 10^(-6)
-delta=1
-step=0
-logL.old=1
-
-while((delta>=epsilon)&(step<50)){
-  step=step+1
-  vtm <-midas(r,K[1],K[2])[[1]]
-  vtm_D <- vtm*DUMMY_LAG
-  wts <- 1/vtm
-  vt_wls <- lm(Y ~ vtm+ X[,1]+X[,2]+ vtm_D +X[,3]+X[,4],weights=wts)
-  beta = vt_wls$coefficients
-  
-  #maximize log-likelihood;
-  optim <- optim(k.old, log_lik_iter, x=X, y=Y,r=r, beta=beta)
-  k.new = optim$par
-  logL = optim$value
-  delta = max(abs(k.new-k.old))
-  delta2 = abs(logL-logL.old)
-  k.old = k.new
-  logL.old = logL
-}     #end of iteration;
-
-step; delta; k.new; -logL
-k1_it <- k.new[1]
-k2_it <- k.new[2]
-k1_it;k2_it
-
-
-##ONE-STEP JOINT OPTIMIZATION
-log_lik <- function(vec,x,y,r) {
-  b0 <- vec[1]
-  b1 <- vec[2]
-  b2 <- vec[3]
-  b3 <- vec[4]
-  b4 <- vec[5]
-  b5 <- vec[6]
-  b6 <- vec[7]
-  k1 <-vec[8]
-  k2 <- vec[9]
-  vtm <-midas(r,k1,k2)[[1]]
-  vtm_D <- vtm*DUMMY_LAG
-  mu <- b0[1] + b1*vtm + b2*x[,1] + b3*x[,2] + b4*vtm_D + b5*x[,3] + b6*x[,4]
-  logl <- - (1/2)*sum(log(vtm)) - (1/2)*sum((y - mu)^2/vtm)
-  return(-logl)
+  ## 2. joint QML of betas and k
+  theta0 <- c(wls_beta(midas_var(k_start[1], k_start[2]), spec), k_start)
+  er <- optim(theta0, negll, spec = spec, hessian = TRUE, control = optim_ctrl)
+  p  <- length(theta0) - 2
+  ## 3. sandwich SEs 
+  G  <- jacobian(ll_i, er$par, spec = spec)
+  H  <- er$hessian[1:p, 1:p] / n
+  Om <- crossprod(G)[1:p, 1:p] / n
+  V  <- solve(H) %*% Om %*% t(solve(H)) / n
+  se <- sqrt(abs(diag(V)))
+  ## 4. adjusted R^2 
+  vt_opt <- midas_var(er$par[p + 1], er$par[p + 2])
+  adjr2  <- summary(lm(q$QERET ~ make_X(vt_opt, spec)[, -1], weights = 1 / vt_opt))$adj.r.squared
+  b  <- er$par[1:p]; tv <- b / se
+  list(coef = b, se = se, t = tv, p = 2 * pt(-abs(tv), df = n - p),
+       k = er$par[p + 1:2], adjr2 = adjr2, loglik = -er$value,
+       convergence = er$convergence, names = spec$labels)
 }
 
-##Initial values of the parameters
-k1 = k1_it
-k2 = k2_it
+## ---- The four specifications ------------------------------------------------
+specs <- list(
+  list(vars = c("LPE_LAG", "INFL_LAG"),    gd = FALSE,
+       labels = c("Constant", "MIDAS", "LPE", "INFL")),
+  list(vars = c("LPE_LAG", "INFL_LAG"),    gd = TRUE,
+       labels = c("Constant", "MIDAS", "LPE", "INFL", "MIDAS_GD", "LPE_GD", "INFL_GD")),
+  list(vars = c("LPE_LAG", "ABSINFL_LAG"), gd = FALSE,
+       labels = c("Constant", "MIDAS", "LPE", "ABSINFL")),
+  list(vars = c("LPE_LAG", "ABSINFL_LAG"), gd = TRUE,
+       labels = c("Constant", "MIDAS", "LPE", "ABSINFL", "MIDAS_GD", "LPE_GD", "ABSINFL_GD"))
+)
 
-midasvar <- midas(r, k1,k2)[[1]]
-wts <- 1/midasvar
-midasvar_D <- midasvar*DUMMY_LAG
-mod_wls <- lm(QERET ~ midasvar+LPE_LAG+INFL_LAG + midasvar_D + LPEGD_LAG + INFLGD_LAG , data= full_q, weights=wts)
-zeta0 <- c(coef(mod_wls),k1,k2) 
-
-##optimize
-er<-optim(zeta0,log_lik,x=X,y=Y, r=r,hessian=TRUE)
-beta <- er$par
-beta
-k1_opt <- er$par[8]
-k2_opt <- er$par[9]
-k1_opt;k2_opt
-
-##Obtain Midas Vt using the optimal k1 and k2 values
-vtmidas_opt <- midas(r,k1 = k1_opt, k2 = k2_opt)[[1]]
-full_q$vtmidas_opt <- as.numeric(vtmidas_opt)
-
-##weighted least square
-wts <- 1/vtmidas_opt
-vt_wls <- lm(QERET ~ vtmidas_opt+LPE_LAG+INFL_LAG + midasvar_D + LPEGD_LAG + INFLGD_LAG , data= full_q, weights=wts)
-summary(vt_wls)
-
-##SE using the sandwich formula
-vtm <- vtmidas_opt
-vtm_D <- vtmidas_opt * DUMMY_LAG
-mu <- er$par[1] + er$par[2]*vtm + er$par[3]*X[,1] + er$par[4]*X[,2] + er$par[5]*vtm_D + er$par[6]*X[,3] + er$par[7]*X[,4]
-
-##step 1: create a vector of individual likelihood for each i obs.
-log_lik_vec <- function(vec,u,y,v) {
-  b0 <- vec[1]
-  b1 <- vec[2]
-  b2 <- vec[3]
-  b3 <- vec[4]
-  b4 <- vec[5]
-  b5 <- vec[6]
-  b6 <- vec[7]
-  k1 <- vec[8]
-  k2 <- vec[9]
-  vtm <-midas(v,k1,k2)[[1]]
-  vtm_D <- vtm*DUMMY_LAG
-  mu <- b0[1] + b1*vtm + b2*u[,1] + b3*u[,2] + b4*vtm_D + b5*u[,3] + b6*u[,4]
-  logl_vec <- -(1/2)*log(vtm) - (1/2)*((y - mu)^2/vtm)
-  return(logl_vec)
+fits <- vector("list", length(specs))
+for (i in seq_along(specs)) {
+  cat("Row", i, "...", format(Sys.time(), "%H:%M:%S"), "\n")
+  fits[[i]] <- fit_spec(specs[[i]])
+  cat("   k =", signif(fits[[i]]$k, 4), " adj R2 =", round(fits[[i]]$adjr2, 3),
+      " conv =", fits[[i]]$convergence, "\n")
 }
 
-##step 2: Calculate the m by n numerical approximation of the gradient of a real m-vector valued function with n-vector argument.
-p = 7
-G <- jacobian(log_lik_vec, er$par, u=X, y = Y, v=r)
-Omega <- (t(G) %*% G)/n
+## Output
+stars <- function(p) ifelse(p < star_cut[1], "***", ifelse(p < star_cut[2], "**",
+                                                           ifelse(p < star_cut[3], "*", "")))
+all_cols <- c("Constant", "MIDAS", "LPE", "INFL", "ABSINFL",
+              "MIDAS_GD", "LPE_GD", "INFL_GD", "ABSINFL_GD")
 
-v_cov1 <- (1/n)* solve(er$hessian[1:p,1:p]/n) %*% Omega[1:p,1:p]%*% t(solve(er$hessian[1:p,1:p]/n))
-sand_se1 <- sqrt(abs(diag(v_cov1[1:p,1:p])))
-summary(vt_wls); sand_se1
+table_rows <- do.call(rbind, lapply(seq_along(fits), function(i) {
+  f <- fits[[i]]
+  est <- setNames(rep("", length(all_cols)), all_cols)
+  tst <- est
+  est[f$names] <- sprintf("%.3f", f$coef)
+  tst[f$names] <- sprintf("(%.3f)%s", f$t, stars(f$p))
+  rbind(data.frame(row = i, stat = "coef", t(est), adjR2 = sprintf("%.3f", f$adjr2)),
+        data.frame(row = i, stat = "t",    t(tst), adjR2 = ""))
+}))
+print(table_rows, row.names = FALSE)
 
-se <- sand_se1
-##t-stat
-est_coefs <- beta[1:p]
-tvals <- est_coefs/se
-tvals
+k_table <- data.frame(row = seq_along(fits),
+                      k1 = sapply(fits, function(f) f$k[1]),
+                      k2 = sapply(fits, function(f) f$k[2]),
+                      loglik = sapply(fits, function(f) f$loglik),
+                      adjR2  = sapply(fits, function(f) f$adjr2))
 
-##p-values
-p0 <- 2*pt(-abs(tvals[1]), df=dim(full_q)[1]-p)
-p1 <- 2*pt(-abs(tvals[2]), df=dim(full_q)[1]-p)
-p2 <- 2*pt(-abs(tvals[3]), df=dim(full_q)[1]-p)
-p3 <- 2*pt(-abs(tvals[4]), df=dim(full_q)[1]-p)
-p4 <- 2*pt(-abs(tvals[5]), df=dim(full_q)[1]-p)
-p5 <- 2*pt(-abs(tvals[6]), df=dim(full_q)[1]-p)
-p6 <- 2*pt(-abs(tvals[7]), df=dim(full_q)[1]-p)
-p0; p1; p2;p3;p4;p5;p6
+write_xlsx(list(table = table_rows, k_and_fit = k_table), "midas_gd_table.xlsx")
