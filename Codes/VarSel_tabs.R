@@ -107,7 +107,7 @@ print(tableB, row.names = FALSE)
 ## ---- Export -----------------------------------------------------------------
 dir.create("Output", showWarnings = FALSE)
 write_xlsx(list(selection_freq = panelA_fmt, best_subset = panelB, bootstrap_bic = tableB),
-           "Output/varsel_tables.xlsx")
+           "output/varsel_tables.xlsx")
 
 tex_rows <- function(df) apply(df, 1, function(r) paste(paste(r, collapse = " & "), "\\\\"))
 texA <- c("\\begin{tabular}{llrrrrrrr}", "\\toprule",
@@ -117,10 +117,10 @@ texA <- c("\\begin{tabular}{llrrrrrrr}", "\\toprule",
           sprintf("\\multicolumn{%d}{c}{Panel B: Best-subset selections using each specification's full available period} \\\\ \\midrule", ncol(panelA_fmt)),
           paste(" & Sample period &", paste(selB_vars, collapse = " & "), "\\\\ \\midrule"),
           tex_rows(panelB), "\\bottomrule", "\\end{tabular}")
-writeLines(texA, "Output/table_selection.tex")
+writeLines(texA, "output/table_selection.tex")
 
 texB <- c("\\begin{tabular}{rlrrlrr}", "\\toprule",
           " & \\multicolumn{3}{c}{Panel A: Return Predictability} & \\multicolumn{3}{c}{Panel B: No Return Predictability} \\\\",
           " & Selected variables & Frequency & Proportion & Selected variables & Frequency & Proportion \\\\ \\midrule",
           tex_rows(tableB), "\\bottomrule", "\\end{tabular}")
-writeLines(texB, "Output/table_bootstrap.tex")
+writeLines(texB, "output/table_bootstrap.tex")
