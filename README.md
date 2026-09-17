@@ -8,11 +8,11 @@ The **`Datasets`** folder contains the data files used for analysis.
 
 - **`qrtly_data_2020.xlsx`**
   
-  Quarterly stock returns and predictor variables.
+  Quarterly stock returns and predictor variables ending in 2020Q4.
   
-- **`G7_International_data.xlsx`**
+- **`qrtly_data_2025.xlsx`**
   
-  Quarterly returns and predictor variables for G7 countries.
+  Quarterly stock returns and predictor variables ending in 2025Q4.
 
 - **`daily_stock_return.xlsx`**
   
