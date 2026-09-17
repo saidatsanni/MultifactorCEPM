@@ -41,13 +41,12 @@ The **`Codes`** folder contains the contains scripts used to construct main resu
 
 - **`Insample_regressions.R`**
 
-  Performs in-sample predictive regressions for one-quarter-ahead returns using the full sample, first-half sample, and second-half sample.
+  Performs in-sample predictive regressions for one-quarter-ahead returns using the full sample, first-half sample, and second-half sample. Generates Table 4.
 
-- **`OOS_Compare.R`**
+- **`oos_tests.R`**
   
-  Out-of-sample forecast evaluation using the HLN, ENC-NEW, and MSE-F tests.
+  Performs out-of-sample forecast evaluation using the HLN, ENC-NEW, and MSE-F tests and generates Table 5.
   
-
 - **`MIDAS_VarianceModel.R`**
 
   MIDAS variance construction from daily returns and in-sample prediction using MIDAS variance only.
