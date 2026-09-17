@@ -37,19 +37,11 @@ The **`Codes`** folder contains the contains scripts used to construct main resu
 
 - **`VarSel_tabs.R`**
 
-  Script for the variable selection analysis. Generates Tables 2 and 3.
+  Performs the variable selection analysis and generates Tables 2 and 3.
 
-- **`Insample_prediction_main.R`**
+- **`Insample_regressions.R`**
 
-  In-sample predictive regressions for one-quarter-ahead returns using the full sample, first-half sample, and second-half sample.
-
-- **`Insample_prediction_qeret4.R`**
-
-  In-sample predictive regressions for four-quarter-ahead returns.
-
-- **`Insample_prediction_inter.R`**
-
-  In-sample predictive regressions for G7 country returns using U.S. forecasting variables.
+  Performs in-sample predictive regressions for one-quarter-ahead returns using the full sample, first-half sample, and second-half sample.
 
 - **`OOS_Compare.R`**
   
